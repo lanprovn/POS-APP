@@ -13,6 +13,7 @@ export interface CreateOrderInput {
   cashierName?: string;
   notes?: string;
   customerId?: string;
+  pointsUsed?: number;
 }
 
 export interface FindOrdersFilter {
@@ -38,6 +39,7 @@ export interface IOrderRepository {
       cashierName: string;
       notes?: string | null;
       customerId?: string | null;
+      pointsUsed?: number;
     },
     items: OrderItemEntity[]
   ): Promise<OrderEntity>;

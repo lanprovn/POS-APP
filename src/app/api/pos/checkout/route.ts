@@ -26,6 +26,7 @@ const checkoutSchema = z.object({
   cashierName: z.string().default("Thu ngân 01"),
   notes: z.string().optional(),
   customerId: z.string().optional().nullable(),
+  pointsUsed: z.number().min(0).default(0),
 });
 
 export async function POST(req: NextRequest) {
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest) {
       cashierName: validated.cashierName,
       notes: validated.notes,
       customerId: validated.customerId || undefined,
+      pointsUsed: validated.pointsUsed,
     });
 
     return jsonSuccess(order, 201);

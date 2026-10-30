@@ -29,6 +29,7 @@ export interface OrderEntity {
   cashierName: string;
   notes?: string | null;
   customerId?: string | null;
+  customer?: { id: string; name: string; phone?: string | null } | null;
   items: OrderItemEntity[];
   createdAt: Date;
   updatedAt: Date;

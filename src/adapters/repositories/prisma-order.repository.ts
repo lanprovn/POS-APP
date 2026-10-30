@@ -16,6 +16,7 @@ export class PrismaOrderRepository implements IOrderRepository {
       cashierName: string;
       notes?: string | null;
       customerId?: string | null;
+      pointsUsed?: number;
     },
     items: OrderItemEntity[]
   ): Promise<OrderEntity> {
@@ -89,11 +90,15 @@ export class PrismaOrderRepository implements IOrderRepository {
 
       // 3. Cập nhật tích điểm cho khách hàng nếu có
       if (orderData.customerId) {
+        const earned = Math.floor(orderData.finalAmount / 10000);
+        const used = Math.max(0, orderData.pointsUsed || 0);
+        const netPoints = earned - used;
+
         await tx.customer.update({
           where: { id: orderData.customerId },
           data: {
             totalSpent: { increment: orderData.finalAmount },
-            points: { increment: Math.floor(orderData.finalAmount / 10000) }, // 10k VND = 1 điểm
+            points: { increment: netPoints },
           },
         });
       }
@@ -111,7 +116,10 @@ export class PrismaOrderRepository implements IOrderRepository {
   async findById(id: string): Promise<OrderEntity | null> {
     const o = await prisma.order.findUnique({
       where: { id },
-      include: { items: true },
+      include: {
+        items: true,
+        customer: { select: { id: true, name: true, phone: true } },
+      },
     });
     if (!o) return null;
     return {
@@ -125,7 +133,10 @@ export class PrismaOrderRepository implements IOrderRepository {
   async findByOrderNumber(orderNumber: string): Promise<OrderEntity | null> {
     const o = await prisma.order.findUnique({
       where: { orderNumber },
-      include: { items: true },
+      include: {
+        items: true,
+        customer: { select: { id: true, name: true, phone: true } },
+      },
     });
     if (!o) return null;
     return {
@@ -156,7 +167,10 @@ export class PrismaOrderRepository implements IOrderRepository {
     const [items, total] = await Promise.all([
       prisma.order.findMany({
         where,
-        include: { items: true },
+        include: {
+          items: true,
+          customer: { select: { id: true, name: true, phone: true } },
+        },
         orderBy: { createdAt: "desc" },
         take: filter?.limit || 50,
         skip: filter?.page && filter?.limit ? (filter.page - 1) * filter.limit : 0,

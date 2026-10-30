@@ -27,6 +27,11 @@ export function ReceiptPrint({ order }: ReceiptPrintProps) {
           Ngày: {new Date(order.createdAt).toLocaleString("vi-VN")}
         </p>
         <p className="text-[10px]">Thu ngân: {order.cashierName}</p>
+        {order.customer && (
+          <p className="text-[10px]">
+            Khách hàng: <strong>{order.customer.name}</strong> {order.customer.phone ? `(${order.customer.phone})` : ""}
+          </p>
+        )}
       </div>
 
       {/* Item List */}
@@ -78,6 +83,12 @@ export function ReceiptPrint({ order }: ReceiptPrintProps) {
           <span>TỔNG THANH TOÁN:</span>
           <span>{order.finalAmount.toLocaleString()} đ</span>
         </div>
+        {order.customer && (
+          <div className="flex justify-between text-[10px] text-emerald-800 font-semibold pt-0.5">
+            <span>Tích điểm đơn hàng này:</span>
+            <span>+{Math.floor(order.finalAmount / 10000)} điểm</span>
+          </div>
+        )}
         <div className="flex justify-between text-[10px] pt-1">
           <span>Phương thức:</span>
           <span className="font-semibold">

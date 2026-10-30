@@ -14,10 +14,25 @@ import {
   CheckCircle2, 
   AlertTriangle,
   X,
-  Package
+  Package,
+  User,
+  UserCheck,
+  UserPlus,
+  Coins,
+  Award
 } from "lucide-react";
 import { ReceiptPrint } from "@/components/ReceiptPrint";
 import { OrderEntity } from "@/core/entities/order.entity";
+import { getCustomerTier, calculatePointValue } from "@/core/entities/customer.entity";
+
+interface Customer {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  totalSpent: number;
+  points: number;
+}
 
 interface Product {
   id: string;
@@ -69,7 +84,24 @@ export default function PosPage() {
   const [completedOrder, setCompletedOrder] = useState<OrderEntity | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Khách hàng & Tích điểm Loyalty
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState("");
+  const [customerResults, setCustomerResults] = useState<Customer[]>([]);
+  const [isSearchingCustomer, setIsSearchingCustomer] = useState(false);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [usePoints, setUsePoints] = useState(false);
+  const [pointsToUse, setPointsToUse] = useState<number>(0);
+
+  // Modal tạo nhanh khách hàng
+  const [showQuickAddModal, setShowQuickAddModal] = useState(false);
+  const [quickName, setQuickName] = useState("");
+  const [quickPhone, setQuickPhone] = useState("");
+  const [quickError, setQuickError] = useState("");
+  const [isSavingQuick, setIsSavingQuick] = useState(false);
+
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const customerInputRef = useRef<HTMLInputElement>(null);
 
   // 1. Tải danh sách sản phẩm và danh mục
   const loadData = async () => {
@@ -100,6 +132,84 @@ export default function PosPage() {
     loadData();
   }, []);
 
+  // Tìm kiếm khách hàng khi gõ ô F3
+  useEffect(() => {
+    if (!customerSearchQuery.trim()) {
+      setCustomerResults([]);
+      setShowCustomerDropdown(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearchingCustomer(true);
+      try {
+        const res = await fetch(`/api/customers?search=${encodeURIComponent(customerSearchQuery.trim())}&limit=5`);
+        const json = await res.json();
+        if (json.success) {
+          setCustomerResults(json.data.customers);
+          setShowCustomerDropdown(true);
+        }
+      } catch (err) {
+        console.error("Lỗi tìm khách hàng:", err);
+      } finally {
+        setIsSearchingCustomer(false);
+      }
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [customerSearchQuery]);
+
+  const handleSelectCustomer = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setCustomerSearchQuery("");
+    setShowCustomerDropdown(false);
+    setUsePoints(false);
+    setPointsToUse(0);
+  };
+
+  const handleRemoveCustomer = () => {
+    setSelectedCustomer(null);
+    setUsePoints(false);
+    setPointsToUse(0);
+    setCustomerSearchQuery("");
+  };
+
+  const handleSaveQuickCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickName.trim()) {
+      setQuickError("Vui lòng nhập tên khách hàng.");
+      return;
+    }
+
+    setIsSavingQuick(true);
+    setQuickError("");
+    try {
+      const res = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: quickName.trim(),
+          phone: quickPhone.trim() || null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        setQuickError(json.error?.message || "Không thể tạo khách hàng.");
+        setIsSavingQuick(false);
+        return;
+      }
+
+      handleSelectCustomer(json.data);
+      setShowQuickAddModal(false);
+      setQuickName("");
+      setQuickPhone("");
+    } catch (err) {
+      setQuickError("Lỗi kết nối máy chủ");
+    } finally {
+      setIsSavingQuick(false);
+    }
+  };
+
   // Lắng nghe phím tắt toàn màn hình (F2: Tìm kiếm, F9: Thanh toán)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -107,6 +217,10 @@ export default function PosPage() {
         e.preventDefault();
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
+      } else if (e.key === "F3") {
+        e.preventDefault();
+        customerInputRef.current?.focus();
+        customerInputRef.current?.select();
       } else if (e.key === "F9") {
         e.preventDefault();
         if (cart.length > 0 && !isCheckoutOpen) {
@@ -235,15 +349,22 @@ export default function PosPage() {
     return discountAmount;
   }, [subtotal, discountAmount, discountPercent, isPercentDiscount]);
 
+  const pointsDiscount = useMemo(() => {
+    if (!usePoints || !selectedCustomer || pointsToUse <= 0) return 0;
+    const maxDiscountAllowed = Math.max(0, subtotal - discountVal);
+    const requestedDiscount = calculatePointValue(pointsToUse);
+    return Math.min(requestedDiscount, maxDiscountAllowed);
+  }, [usePoints, selectedCustomer, pointsToUse, subtotal, discountVal]);
+
   const taxVal = useMemo(() => {
     if (!enableVat) return 0;
-    const taxableAmount = Math.max(0, subtotal - discountVal);
+    const taxableAmount = Math.max(0, subtotal - discountVal - pointsDiscount);
     return Math.round((taxableAmount * vatPercent) / 100);
-  }, [subtotal, discountVal, enableVat, vatPercent]);
+  }, [subtotal, discountVal, pointsDiscount, enableVat, vatPercent]);
 
   const finalAmount = useMemo(() => {
-    return Math.max(0, subtotal - discountVal + taxVal);
-  }, [subtotal, discountVal, taxVal]);
+    return Math.max(0, subtotal - discountVal - pointsDiscount + taxVal);
+  }, [subtotal, discountVal, pointsDiscount, taxVal]);
 
   const changeAmount = useMemo(() => {
     if (paymentMethod !== "CASH") return 0;
@@ -268,12 +389,14 @@ export default function PosPage() {
           quantity: item.quantity,
           unitPrice: item.product.sellingPrice,
         })),
-        discountAmount: discountVal,
+        discountAmount: discountVal + pointsDiscount,
         taxAmount: taxVal,
         customerPayment:
           paymentMethod === "CASH" ? customerPayment : finalAmount,
         paymentMethod,
         cashierName: "Thu ngân 01",
+        customerId: selectedCustomer?.id || null,
+        pointsUsed: usePoints ? pointsToUse : 0,
       };
 
       const res = await fetch("/api/pos/checkout", {
@@ -311,6 +434,9 @@ export default function PosPage() {
     setCustomerPayment(0);
     setDiscountAmount(0);
     setDiscountPercent(0);
+    setSelectedCustomer(null);
+    setUsePoints(false);
+    setPointsToUse(0);
     searchInputRef.current?.focus();
   };
 
@@ -478,6 +604,202 @@ export default function PosPage() {
           </button>
         </div>
 
+        {/* Thanh Chọn Khách Hàng & Tích Điểm CRM */}
+        <div className="p-3 bg-slate-50 border-b border-slate-200 relative">
+          {!selectedCustomer ? (
+            <div className="relative">
+              <div className="flex items-center gap-1.5">
+                <div className="relative flex-1">
+                  <User className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    ref={customerInputRef}
+                    type="text"
+                    value={customerSearchQuery}
+                    onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                    onFocus={() => {
+                      if (customerResults.length > 0) setShowCustomerDropdown(true);
+                    }}
+                    placeholder="F3 - Tìm khách hàng (SĐT / Tên)..."
+                    className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                  />
+                  {customerSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomerSearchQuery("");
+                        setShowCustomerDropdown(false);
+                      }}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuickPhone(customerSearchQuery);
+                    setQuickName("");
+                    setQuickError("");
+                    setShowQuickAddModal(true);
+                  }}
+                  className="px-2.5 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl text-xs font-semibold flex items-center gap-1 shrink-0 transition"
+                  title="Thêm nhanh khách hàng mới"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Tạo mới</span>
+                </button>
+              </div>
+
+              {/* Autocomplete Dropdown */}
+              {showCustomerDropdown && (
+                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-xl shadow-xl border border-slate-200 z-30 overflow-hidden divide-y divide-slate-100 animate-in fade-in duration-100 max-h-56 overflow-y-auto">
+                  {isSearchingCustomer ? (
+                    <div className="p-3 text-center text-xs text-slate-400">Đang tìm khách hàng...</div>
+                  ) : customerResults.length > 0 ? (
+                    customerResults.map((c) => {
+                      const tier = getCustomerTier(c.totalSpent);
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => handleSelectCustomer(c)}
+                          className="w-full p-2.5 text-left hover:bg-emerald-50 flex items-center justify-between transition group"
+                        >
+                          <div>
+                            <div className="font-semibold text-xs text-slate-900 group-hover:text-emerald-700">
+                              {c.name}
+                            </div>
+                            <div className="text-[11px] text-slate-400 font-mono">
+                              {c.phone || "Chưa có SĐT"}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold border ${tier.badgeClass}`}>
+                              {tier.label}
+                            </span>
+                            <div className="text-[10px] text-indigo-600 font-bold mt-0.5">
+                              {c.points} điểm
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="p-3 text-center">
+                      <p className="text-xs text-slate-500">Không tìm thấy khách hàng này.</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickPhone(customerSearchQuery);
+                          setQuickName("");
+                          setQuickError("");
+                          setShowQuickAddModal(true);
+                          setShowCustomerDropdown(false);
+                        }}
+                        className="mt-1 text-xs text-emerald-600 font-bold hover:underline"
+                      >
+                        + Tạo nhanh khách &quot;{customerSearchQuery}&quot;
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center">
+                    <UserCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-xs text-slate-900">{selectedCustomer.name}</span>
+                      {(() => {
+                        const tier = getCustomerTier(selectedCustomer.totalSpent);
+                        return (
+                          <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold border ${tier.badgeClass}`}>
+                            {tier.label}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-mono">
+                      {selectedCustomer.phone || "Không có SĐT"} • Điểm: <strong className="text-indigo-600 font-mono">{selectedCustomer.points}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleRemoveCustomer}
+                  className="p-1 text-slate-400 hover:text-rose-600 hover:bg-white rounded-lg transition"
+                  title="Bỏ chọn khách hàng (Về khách lẻ)"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Tích điểm & Tiêu điểm */}
+              <div className="mt-2 pt-2 border-t border-emerald-200/50 flex flex-wrap items-center justify-between text-xs">
+                {selectedCustomer.points > 0 ? (
+                  <div className="flex items-center gap-2 w-full justify-between">
+                    <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-700 font-medium">
+                      <input
+                        type="checkbox"
+                        checked={usePoints}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setUsePoints(checked);
+                          if (checked) {
+                            const maxPossiblePoints = Math.min(
+                              selectedCustomer.points,
+                              Math.floor((subtotal - discountVal) / 1000)
+                            );
+                            setPointsToUse(Math.max(0, maxPossiblePoints));
+                          } else {
+                            setPointsToUse(0);
+                          }
+                        }}
+                        className="rounded text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5"
+                      />
+                      <span>Đổi điểm trừ tiền</span>
+                    </label>
+
+                    {usePoints && (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          max={selectedCustomer.points}
+                          value={pointsToUse}
+                          onChange={(e) => {
+                            const val = Math.min(
+                              selectedCustomer.points,
+                              Math.max(0, parseInt(e.target.value) || 0)
+                            );
+                            setPointsToUse(val);
+                          }}
+                          className="w-16 px-1.5 py-0.5 text-xs text-right border border-emerald-300 rounded font-mono font-bold text-indigo-700 bg-white"
+                        />
+                        <span className="text-[10px] text-slate-500">điểm (-{(pointsDiscount).toLocaleString()}đ)</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-[10px] text-slate-400 italic">Khách chưa có điểm tích lũy</span>
+                )}
+                
+                <div className="w-full text-right text-[10px] text-emerald-700 font-semibold mt-1">
+                  +{(Math.floor(finalAmount / 10000)).toLocaleString()} điểm thưởng sau đơn
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Danh sách Item Giỏ Hàng */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {cart.length === 0 ? (
@@ -583,6 +905,17 @@ export default function PosPage() {
                 <span>đ</span>
               </div>
             </div>
+
+            {/* Trừ điểm tích lũy */}
+            {pointsDiscount > 0 && (
+              <div className="flex justify-between items-center text-indigo-700 font-medium">
+                <span className="flex items-center gap-1">
+                  <Coins className="w-3.5 h-3.5" />
+                  <span>Trừ điểm ({pointsToUse} đ):</span>
+                </span>
+                <span className="font-bold">-{pointsDiscount.toLocaleString()} đ</span>
+              </div>
+            )}
 
             {/* Thuế VAT */}
             <div className="flex justify-between items-center">
@@ -836,6 +1169,80 @@ export default function PosPage() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Tạo nhanh khách hàng */}
+      {showQuickAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl border border-slate-100 overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2 font-bold text-slate-900 text-sm">
+                <UserPlus className="w-4 h-4 text-emerald-600" />
+                <span>Tạo Nhanh Khách Hàng</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowQuickAddModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveQuickCustomer} className="p-5 space-y-3.5">
+              {quickError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-600 text-xs">
+                  {quickError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                  Họ và Tên <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  placeholder="Ví dụ: Anh Hoàng"
+                  value={quickName}
+                  onChange={(e) => setQuickName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                  Số điện thoại
+                </label>
+                <input
+                  type="tel"
+                  placeholder="0912345678"
+                  value={quickPhone}
+                  onChange={(e) => setQuickPhone(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowQuickAddModal(false)}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingQuick}
+                  className="px-4 py-1.5 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 transition"
+                >
+                  {isSavingQuick ? "Đang tạo..." : "Tạo & Chọn"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

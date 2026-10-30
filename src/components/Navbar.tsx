@@ -8,7 +8,8 @@ import {
   Boxes, 
   Receipt, 
   BarChart3, 
-  Store
+  Store,
+  Users
 } from "lucide-react";
 
 export function Navbar() {
@@ -19,6 +20,7 @@ export function Navbar() {
     { href: "/products", label: "Sản phẩm", icon: Package },
     { href: "/inventory", label: "Tồn kho", icon: Boxes },
     { href: "/orders", label: "Đơn hàng", icon: Receipt },
+    { href: "/customers", label: "Khách hàng", icon: Users },
     { href: "/reports", label: "Báo cáo", icon: BarChart3 },
   ];
 

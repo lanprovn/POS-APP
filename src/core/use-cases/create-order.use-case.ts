@@ -16,6 +16,7 @@ export interface CreateOrderUseCaseInput {
   cashierName?: string;
   notes?: string;
   customerId?: string;
+  pointsUsed?: number;
 }
 
 export class CreateOrderUseCase {
@@ -99,6 +100,7 @@ export class CreateOrderUseCase {
       cashierName: input.cashierName || "Thu ngân",
       notes: input.notes || null,
       customerId: input.customerId || null,
+      pointsUsed: input.pointsUsed || 0,
     };
 
     return await this.orderRepository.createWithTransaction(orderData, orderItems);
