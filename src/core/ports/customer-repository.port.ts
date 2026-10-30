@@ -46,3 +46,4 @@ export interface ICustomerRepository {
   adjustPoints(id: string, pointsDelta: number): Promise<CustomerEntity>;
   getStats(): Promise<CustomerStats>;
 }
+

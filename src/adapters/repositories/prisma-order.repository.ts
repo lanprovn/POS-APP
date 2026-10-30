@@ -17,6 +17,7 @@ export class PrismaOrderRepository implements IOrderRepository {
       notes?: string | null;
       customerId?: string | null;
       pointsUsed?: number;
+      shiftId?: string | null;
     },
     items: OrderItemEntity[]
   ): Promise<OrderEntity> {
@@ -37,6 +38,7 @@ export class PrismaOrderRepository implements IOrderRepository {
           cashierName: orderData.cashierName,
           notes: orderData.notes,
           customerId: orderData.customerId,
+          shiftId: orderData.shiftId || null,
           items: {
             create: items.map((item) => ({
               productId: item.productId,
@@ -99,6 +101,27 @@ export class PrismaOrderRepository implements IOrderRepository {
           data: {
             totalSpent: { increment: orderData.finalAmount },
             points: { increment: netPoints },
+          },
+        });
+      }
+
+      // 4. Cập nhật doanh số ca làm việc nếu đơn hàng thuộc về ca mở
+      if (orderData.shiftId) {
+        const isCash = orderData.paymentMethod === "CASH";
+        const isBank = orderData.paymentMethod === "BANK_TRANSFER";
+        const isCard = orderData.paymentMethod === "CARD";
+
+        await tx.cashShift.update({
+          where: { id: orderData.shiftId },
+          data: {
+            ordersCount: { increment: 1 },
+            totalSales: { increment: orderData.finalAmount },
+            ...(isCash && {
+              cashSales: { increment: orderData.finalAmount },
+              expectedCash: { increment: orderData.finalAmount },
+            }),
+            ...(isBank && { bankSales: { increment: orderData.finalAmount } }),
+            ...(isCard && { cardSales: { increment: orderData.finalAmount } }),
           },
         });
       }

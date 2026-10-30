@@ -76,6 +76,8 @@ model Order {
   notes           String?
   customerId      String?
   customer        Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  shiftId         String?
+  shift           CashShift?  @relation(fields: [shiftId], references: [id], onDelete: SetNull)
   items           OrderItem[]
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
@@ -116,4 +118,49 @@ model InventoryTransaction {
   @@index([productId])
   @@index([createdAt])
   @@map("inventory_transactions")
+}
+
+model CashShift {
+  id           String            @id @default(cuid())
+  shiftCode    String            @unique
+  cashierName  String
+  status       String            @default("OPEN") // OPEN, CLOSED
+  startTime    DateTime          @default(now())
+  endTime      DateTime?
+  startingCash Float             @default(0) // Tiền mặt ban đầu trong két
+  endingCash   Float?            // Tiền mặt kiểm đếm thực tế khi đóng ca
+  expectedCash Float             @default(0) // Tiền mặt lý thuyết hệ thống tính
+  difference   Float?            // Chênh lệch (endingCash - expectedCash)
+  cashSales    Float             @default(0) // Doanh thu tiền mặt
+  bankSales    Float             @default(0) // Doanh thu chuyển khoản VietQR
+  cardSales    Float             @default(0) // Doanh thu thẻ
+  totalSales   Float             @default(0) // Tổng doanh thu
+  ordersCount  Int               @default(0) // Số đơn hàng
+  cashPayout   Float             @default(0) // Chi tiền mặt phát sinh (mua đá, túi xốp...)
+  cashDrop     Float             @default(0) // Rút tiền nộp két chính
+  cashIn       Float             @default(0) // Nạp thêm tiền mặt
+  notes        String?
+  orders       Order[]
+  transactions CashTransaction[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([shiftCode])
+  @@index([status])
+  @@index([startTime])
+  @@map("cash_shifts")
+}
+
+model CashTransaction {
+  id          String    @id @default(cuid())
+  shiftId     String
+  shift       CashShift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  type        String    // PAYOUT (Chi ra), DROP (Nộp két), IN (Nạp thêm)
+  amount      Float
+  reason      String
+  performedBy String    @default("Thu ngân")
+  createdAt   DateTime  @default(now())
+
+  @@index([shiftId])
+  @@map("cash_transactions")
 }

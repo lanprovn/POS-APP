@@ -27,6 +27,7 @@ const checkoutSchema = z.object({
   notes: z.string().optional(),
   customerId: z.string().optional().nullable(),
   pointsUsed: z.number().min(0).default(0),
+  shiftId: z.string().optional().nullable(),
 });
 
 export async function POST(req: NextRequest) {
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest) {
       notes: validated.notes,
       customerId: validated.customerId || undefined,
       pointsUsed: validated.pointsUsed,
+      shiftId: validated.shiftId || undefined,
     });
 
     return jsonSuccess(order, 201);

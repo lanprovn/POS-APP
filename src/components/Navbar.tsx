@@ -9,7 +9,8 @@ import {
   Receipt, 
   BarChart3, 
   Store,
-  Users
+  Users,
+  Clock
 } from "lucide-react";
 
 export function Navbar() {
@@ -17,6 +18,7 @@ export function Navbar() {
 
   const navLinks = [
     { href: "/pos", label: "Quầy POS", icon: ShoppingCart },
+    { href: "/shifts", label: "Sổ ca", icon: Clock },
     { href: "/products", label: "Sản phẩm", icon: Package },
     { href: "/inventory", label: "Tồn kho", icon: Boxes },
     { href: "/orders", label: "Đơn hàng", icon: Receipt },

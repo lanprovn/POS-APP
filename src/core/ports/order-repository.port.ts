@@ -14,6 +14,7 @@ export interface CreateOrderInput {
   notes?: string;
   customerId?: string;
   pointsUsed?: number;
+  shiftId?: string | null;
 }
 
 export interface FindOrdersFilter {
@@ -40,6 +41,7 @@ export interface IOrderRepository {
       notes?: string | null;
       customerId?: string | null;
       pointsUsed?: number;
+      shiftId?: string | null;
     },
     items: OrderItemEntity[]
   ): Promise<OrderEntity>;

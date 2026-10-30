@@ -19,10 +19,16 @@ import {
   UserCheck,
   UserPlus,
   Coins,
-  Award
+  Award,
+  Clock,
+  Wallet,
+  ArrowDownLeft,
+  ArrowUpRight
 } from "lucide-react";
 import { ReceiptPrint } from "@/components/ReceiptPrint";
+import { ZReportPrint } from "@/components/ZReportPrint";
 import { OrderEntity } from "@/core/entities/order.entity";
+import { CashShiftEntity } from "@/core/entities/shift.entity";
 import { getCustomerTier, calculatePointValue } from "@/core/entities/customer.entity";
 
 interface Customer {
@@ -100,6 +106,33 @@ export default function PosPage() {
   const [quickError, setQuickError] = useState("");
   const [isSavingQuick, setIsSavingQuick] = useState(false);
 
+  // Ca làm việc & Két tiền (Shift Management)
+  const [currentShift, setCurrentShift] = useState<CashShiftEntity | null>(null);
+  const [showOpenShiftModal, setShowOpenShiftModal] = useState(false);
+  const [showCloseShiftModal, setShowCloseShiftModal] = useState(false);
+  const [showCashTxModal, setShowCashTxModal] = useState(false);
+  const [printZReportShift, setPrintZReportShift] = useState<CashShiftEntity | null>(null);
+
+  // Form mở ca
+  const [openCashierName, setOpenCashierName] = useState("Thu ngân 01");
+  const [openStartingCash, setOpenStartingCash] = useState(500000);
+  const [openNotes, setOpenNotes] = useState("");
+  const [isOpenShiftSubmitting, setIsOpenShiftSubmitting] = useState(false);
+  const [openShiftError, setOpenShiftError] = useState("");
+
+  // Form đóng ca
+  const [closeActualCash, setCloseActualCash] = useState<number>(0);
+  const [closeNotes, setCloseNotes] = useState("");
+  const [isCloseShiftSubmitting, setIsCloseShiftSubmitting] = useState(false);
+  const [closeShiftError, setCloseShiftError] = useState("");
+
+  // Form thu chi tiền mặt
+  const [txType, setTxType] = useState<"PAYOUT" | "DROP" | "IN">("PAYOUT");
+  const [txAmount, setTxAmount] = useState<number>(0);
+  const [txReason, setTxReason] = useState("");
+  const [isTxSubmitting, setIsTxSubmitting] = useState(false);
+  const [txError, setTxError] = useState("");
+
   const searchInputRef = useRef<HTMLInputElement>(null);
   const customerInputRef = useRef<HTMLInputElement>(null);
 
@@ -128,9 +161,128 @@ export default function PosPage() {
     }
   };
 
+  const fetchCurrentShift = async () => {
+    try {
+      const res = await fetch("/api/shifts/current");
+      const json = await res.json();
+      if (json.success) {
+        setCurrentShift(json.data);
+      }
+    } catch (err) {
+      console.error("Lỗi tải thông tin ca:", err);
+    }
+  };
+
   useEffect(() => {
     loadData();
+    fetchCurrentShift();
   }, []);
+
+  const handleOpenShift = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsOpenShiftSubmitting(true);
+    setOpenShiftError("");
+    try {
+      const res = await fetch("/api/shifts/open", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cashierName: openCashierName,
+          startingCash: openStartingCash,
+          notes: openNotes,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        setOpenShiftError(json.error?.message || "Không thể mở ca làm việc");
+        setIsOpenShiftSubmitting(false);
+        return;
+      }
+      setCurrentShift(json.data);
+      setShowOpenShiftModal(false);
+    } catch {
+      setOpenShiftError("Lỗi kết nối máy chủ");
+    } finally {
+      setIsOpenShiftSubmitting(false);
+    }
+  };
+
+  const handleCloseShift = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentShift) return;
+    setIsCloseShiftSubmitting(true);
+    setCloseShiftError("");
+    try {
+      const res = await fetch("/api/shifts/close", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shiftId: currentShift.id,
+          endingCash: closeActualCash,
+          notes: closeNotes,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        setCloseShiftError(json.error?.message || "Không thể đóng ca");
+        setIsCloseShiftSubmitting(false);
+        return;
+      }
+      const closedShift = json.data;
+      setCurrentShift(null);
+      setShowCloseShiftModal(false);
+      setPrintZReportShift(closedShift);
+      setTimeout(() => {
+        window.print();
+      }, 250);
+    } catch {
+      setCloseShiftError("Lỗi kết nối máy chủ");
+    } finally {
+      setIsCloseShiftSubmitting(false);
+    }
+  };
+
+  const handleAddCashTx = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentShift) return;
+    if (txAmount <= 0) {
+      setTxError("Vui lòng nhập số tiền lớn hơn 0");
+      return;
+    }
+    if (!txReason.trim()) {
+      setTxError("Vui lòng nhập lý do giao dịch");
+      return;
+    }
+    setIsTxSubmitting(true);
+    setTxError("");
+    try {
+      const res = await fetch("/api/shifts/transaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shiftId: currentShift.id,
+          type: txType,
+          amount: txAmount,
+          reason: txReason.trim(),
+          performedBy: currentShift.cashierName,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        setTxError(json.error?.message || "Lỗi ghi nhận giao dịch");
+        setIsTxSubmitting(false);
+        return;
+      }
+      setShowCashTxModal(false);
+      setTxAmount(0);
+      setTxReason("");
+      fetchCurrentShift();
+    } catch {
+      setTxError("Lỗi kết nối máy chủ");
+    } finally {
+      setIsTxSubmitting(false);
+    }
+  };
 
   // Tìm kiếm khách hàng khi gõ ô F3
   useEffect(() => {
@@ -394,9 +546,10 @@ export default function PosPage() {
         customerPayment:
           paymentMethod === "CASH" ? customerPayment : finalAmount,
         paymentMethod,
-        cashierName: "Thu ngân 01",
+        cashierName: currentShift?.cashierName || "Thu ngân 01",
         customerId: selectedCustomer?.id || null,
         pointsUsed: usePoints ? pointsToUse : 0,
+        shiftId: currentShift?.id || null,
       };
 
       const res = await fetch("/api/pos/checkout", {
@@ -415,6 +568,7 @@ export default function PosPage() {
       setCompletedOrder(data.data);
       setCart([]);
       loadData(); // Cập nhật lại tồn kho mới nhất
+      fetchCurrentShift(); // Cập nhật số dư két tiền ca làm việc
     } catch (err: any) {
       setErrorMessage(err.message || "Lỗi kết nối máy chủ");
     } finally {
@@ -444,6 +598,85 @@ export default function PosPage() {
     <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-slate-100">
       {/* Cột Trái: Danh mục & Lưới Sản Phẩm */}
       <div className="flex-1 flex flex-col p-4 overflow-y-auto space-y-4">
+        {/* Banner Quản lý Ca Bán Hàng & Két Tiền */}
+        {!currentShift ? (
+          <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-xs text-amber-900">Chưa Mở Ca Bán Hàng</h4>
+                <p className="text-[11px] text-amber-700 mt-0.5">
+                  Vui lòng khai báo số tiền lẻ đầu ca để quản lý két tiền và in biên bản Z-Report khi kết ca.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setOpenStartingCash(500000);
+                setOpenNotes("");
+                setOpenShiftError("");
+                setShowOpenShiftModal(true);
+              }}
+              className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm transition shrink-0"
+            >
+              + Mở Ca Bán Hàng
+            </button>
+          </div>
+        ) : (
+          <div className="bg-white border border-slate-200 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="font-bold text-xs text-slate-900 font-mono">{currentShift.shiftCode}</span>
+                <span className="text-slate-300">|</span>
+                <span className="text-xs text-slate-600">Thu ngân: <strong>{currentShift.cashierName}</strong></span>
+              </div>
+              <div className="hidden md:flex items-center gap-2 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 text-xs">
+                <Wallet className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="text-slate-500">Tiền két:</span>
+                <span className="font-mono font-bold text-emerald-700">{currentShift.expectedCash.toLocaleString()}đ</span>
+              </div>
+              <div className="hidden lg:flex items-center gap-1.5 text-xs text-slate-500">
+                <span>Doanh số: <strong className="text-slate-900 font-mono">{currentShift.totalSales.toLocaleString()}đ</strong> ({currentShift.ordersCount} đơn)</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setTxType("PAYOUT");
+                  setTxAmount(0);
+                  setTxReason("");
+                  setTxError("");
+                  setShowCashTxModal(true);
+                }}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition"
+                title="Ghi nhận chi ngoài hoặc nộp két"
+              >
+                <ArrowDownLeft className="w-3.5 h-3.5 text-rose-500" />
+                <span>Thu / Chi tiền</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCloseActualCash(currentShift.expectedCash);
+                  setCloseNotes("");
+                  setCloseShiftError("");
+                  setShowCloseShiftModal(true);
+                }}
+                className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold flex items-center gap-1 transition"
+                title="Chốt ca & In phiếu Z-Report"
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Kết Ca (Đóng Ca)</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Thanh tìm kiếm & Quét mã vạch */}
         <div className="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-3">
           <div className="relative flex-1">
@@ -1246,6 +1479,362 @@ export default function PosPage() {
           </div>
         </div>
       )}
+
+      {/* Modal: Mở ca bán hàng */}
+      {showOpenShiftModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl border border-slate-100 overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2 font-bold text-slate-900 text-sm">
+                <Clock className="w-4 h-4 text-emerald-600" />
+                <span>Mở Ca Bán Hàng Mới</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowOpenShiftModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleOpenShift} className="p-5 space-y-4">
+              {openShiftError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-600 text-xs">
+                  {openShiftError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                  Thu ngân phụ trách <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={openCashierName}
+                  onChange={(e) => setOpenCashierName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                  Tiền mặt lẻ đầu ca trong két <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="10000"
+                  required
+                  value={openStartingCash}
+                  onChange={(e) => setOpenStartingCash(Math.max(0, parseInt(e.target.value) || 0))}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm font-mono font-bold text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                />
+                {/* Phím chọn mệnh giá nhanh */}
+                <div className="flex items-center gap-1.5 mt-2">
+                  {[200000, 500000, 1000000, 2000000].map((val) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setOpenStartingCash(val)}
+                      className="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-[10px] font-semibold text-slate-600 font-mono transition"
+                    >
+                      {(val / 1000).toLocaleString()}k
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                  Ghi chú ca làm (Tùy chọn)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ca sáng / Ca tối..."
+                  value={openNotes}
+                  onChange={(e) => setOpenNotes(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowOpenShiftModal(false)}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isOpenShiftSubmitting}
+                  className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm disabled:opacity-50 transition"
+                >
+                  {isOpenShiftSubmitting ? "Đang mở..." : "Xác Nhận Vào Ca"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Đóng ca bán hàng (Kết ca & In phiếu Z) */}
+      {showCloseShiftModal && currentShift && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">Kết Ca & Bàn Giao Két Tiền</h3>
+                <p className="text-[11px] text-slate-500">Mã ca: <strong className="font-mono">{currentShift.shiftCode}</strong></p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCloseShiftModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCloseShift} className="p-6 space-y-4">
+              {closeShiftError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-600 text-xs">
+                  {closeShiftError}
+                </div>
+              )}
+
+              {/* Bảng tóm tắt két tiền lý thuyết */}
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 text-xs space-y-1.5">
+                <div className="flex justify-between text-slate-600">
+                  <span>Tiền mặt đầu ca:</span>
+                  <span className="font-mono font-semibold">{currentShift.startingCash.toLocaleString()}đ</span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>(+) Doanh thu tiền mặt:</span>
+                  <span className="font-mono font-semibold text-emerald-600">+{currentShift.cashSales.toLocaleString()}đ</span>
+                </div>
+                {currentShift.cashIn > 0 && (
+                  <div className="flex justify-between text-slate-600">
+                    <span>(+) Nạp thêm:</span>
+                    <span className="font-mono font-semibold text-emerald-600">+{currentShift.cashIn.toLocaleString()}đ</span>
+                  </div>
+                )}
+                {currentShift.cashPayout > 0 && (
+                  <div className="flex justify-between text-slate-600">
+                    <span>(-) Chi tiền ngoài:</span>
+                    <span className="font-mono font-semibold text-rose-600">-{currentShift.cashPayout.toLocaleString()}đ</span>
+                  </div>
+                )}
+                {currentShift.cashDrop > 0 && (
+                  <div className="flex justify-between text-slate-600">
+                    <span>(-) Rút nộp két:</span>
+                    <span className="font-mono font-semibold text-rose-600">-{currentShift.cashDrop.toLocaleString()}đ</span>
+                  </div>
+                )}
+                <div className="pt-2 border-t border-slate-200 flex justify-between font-bold text-sm">
+                  <span>TIỀN KÉT LÝ THUYẾT:</span>
+                  <span className="font-mono text-emerald-700">{currentShift.expectedCash.toLocaleString()}đ</span>
+                </div>
+              </div>
+
+              {/* Ô nhập tiền đếm thực tế */}
+              <div>
+                <label className="block text-xs font-bold text-slate-800 uppercase mb-1.5">
+                  Số tiền mặt thực tế đếm được <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1000"
+                  required
+                  value={closeActualCash}
+                  onChange={(e) => setCloseActualCash(Math.max(0, parseInt(e.target.value) || 0))}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-base font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                />
+              </div>
+
+              {/* Hiển thị chênh lệch */}
+              {(() => {
+                const diff = closeActualCash - currentShift.expectedCash;
+                return (
+                  <div
+                    className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between ${
+                      diff === 0
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                        : diff > 0
+                        ? "bg-blue-50 border-blue-200 text-blue-800"
+                        : "bg-rose-50 border-rose-200 text-rose-800"
+                    }`}
+                  >
+                    <span>Trạng thái đối soát:</span>
+                    <span className="font-mono font-bold">
+                      {diff === 0
+                        ? "✓ Khớp tiền hoàn hảo (0đ)"
+                        : diff > 0
+                        ? `Thừa +${diff.toLocaleString()}đ`
+                        : `Thiếu ${diff.toLocaleString()}đ`}
+                    </span>
+                  </div>
+                );
+              })()}
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                  Ghi chú bàn giao
+                </label>
+                <input
+                  type="text"
+                  placeholder="Bàn giao ca trưa..."
+                  value={closeNotes}
+                  onChange={(e) => setCloseNotes(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowCloseShiftModal(false)}
+                  className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCloseShiftSubmitting}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-200 flex items-center gap-1.5 disabled:opacity-50 transition"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>{isCloseShiftSubmitting ? "Đang đóng..." : "Chốt Ca & In Phiếu Z"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Ghi nhận Thu / Chi tiền mặt phát sinh */}
+      {showCashTxModal && currentShift && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-sm w-full shadow-2xl border border-slate-100 overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2 font-bold text-slate-900 text-sm">
+                <ArrowDownLeft className="w-4 h-4 text-rose-500" />
+                <span>Thu / Chi Tiền Mặt Trong Ca</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCashTxModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddCashTx} className="p-5 space-y-4">
+              {txError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-600 text-xs">
+                  {txError}
+                </div>
+              )}
+
+              {/* Phân loại Loại Giao Dịch */}
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">
+                  Loại giao dịch
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTxType("PAYOUT")}
+                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition ${
+                      txType === "PAYOUT"
+                        ? "bg-rose-50 border-rose-300 text-rose-700 shadow-sm"
+                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    Chi ngoài
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTxType("DROP")}
+                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition ${
+                      txType === "DROP"
+                        ? "bg-amber-50 border-amber-300 text-amber-800 shadow-sm"
+                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    Rút nộp két
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTxType("IN")}
+                    className={`py-2 px-1 rounded-xl text-xs font-bold border transition ${
+                      txType === "IN"
+                        ? "bg-emerald-50 border-emerald-300 text-emerald-800 shadow-sm"
+                        : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    Nạp thêm
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                  Số tiền (VNĐ) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="1000"
+                  step="1000"
+                  required
+                  placeholder="Ví dụ: 50000"
+                  value={txAmount || ""}
+                  onChange={(e) => setTxAmount(Math.max(0, parseInt(e.target.value) || 0))}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                  Lý do chi / nộp <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Mua đá 20k, Mua túi xốp..."
+                  value={txReason}
+                  onChange={(e) => setTxReason(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowCashTxModal(false)}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isTxSubmitting}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 transition"
+                >
+                  {isTxSubmitting ? "Đang lưu..." : "Xác Nhận"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Component In Phiếu Z-Report Ẩn */}
+      <ZReportPrint shift={printZReportShift} />
 
       {/* Component hóa đơn in nhiệt ẩn */}
       <ReceiptPrint order={completedOrder} />

@@ -30,15 +30,16 @@ body {
   background: #94a3b8;
 }
 
-/* Receipt Print Styling (Khổ giấy 80mm tiêu chuẩn) */
+/* Receipt & Z-Report Print Styling (Khổ giấy 80mm tiêu chuẩn) */
 @media print {
   body * {
     visibility: hidden;
   }
-  #printable-receipt, #printable-receipt * {
+  #printable-receipt, #printable-receipt *,
+  #printable-zreport, #printable-zreport * {
     visibility: visible;
   }
-  #printable-receipt {
+  #printable-receipt, #printable-zreport {
     position: absolute;
     left: 0;
     top: 0;

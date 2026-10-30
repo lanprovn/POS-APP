@@ -88,3 +88,4 @@ export function calculatePointValue(points: number): number {
   if (points <= 0) return 0;
   return points * 1000;
 }
+

@@ -17,6 +17,7 @@ export interface CreateOrderUseCaseInput {
   notes?: string;
   customerId?: string;
   pointsUsed?: number;
+  shiftId?: string | null;
 }
 
 export class CreateOrderUseCase {
@@ -101,6 +102,7 @@ export class CreateOrderUseCase {
       notes: input.notes || null,
       customerId: input.customerId || null,
       pointsUsed: input.pointsUsed || 0,
+      shiftId: input.shiftId || null,
     };
 
     return await this.orderRepository.createWithTransaction(orderData, orderItems);
