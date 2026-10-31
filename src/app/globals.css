@@ -35,6 +35,27 @@ body {
   background: #94a3b8;
 }
 
+/* Sleek Dark POS Mini Scrollbar (Thanh cuộn nhỏ chuyên dụng cho Quầy Thu Ngân) */
+.pos-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(71, 85, 105, 0.6) transparent;
+}
+.pos-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.pos-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 9999px;
+}
+.pos-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.6);
+  border-radius: 9999px;
+}
+.pos-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.8);
+}
+
 /* Hide scrollbar utility */
 .scrollbar-none::-webkit-scrollbar {
   display: none;

@@ -16,9 +16,8 @@ export default function RootLayout({
     <html lang="vi">
       <body className="min-h-screen bg-slate-50 text-slate-900 flex flex-col antialiased">
         <Navbar />
-        <main className="flex-1 flex flex-col">{children}</main>
+        <main className="flex-1 flex flex-col min-h-0">{children}</main>
       </body>
     </html>
   );
 }
-

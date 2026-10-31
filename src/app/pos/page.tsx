@@ -667,14 +667,14 @@ export default function PosPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-56px)] overflow-hidden bg-slate-900 select-none">
+    <div className="flex-1 flex flex-col h-[calc(100vh-56px)] max-h-[calc(100vh-56px)] overflow-hidden bg-slate-900 select-none">
       {/* KHUNG POS: Chia đôi 65% Catalog / 35% Register */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row h-full min-h-0 overflow-hidden">
         
         {/* ========================================================================= */}
         {/* CỘT TRÁI (65%): CATALOG HÀNG HÓA & THANH TÌM KIẾM CÔNG THÁI HỌC          */}
         {/* ========================================================================= */}
-        <div className="flex-1 flex flex-col bg-slate-950/60 border-r border-slate-800/80 overflow-hidden">
+        <div className="flex-1 flex flex-col h-full min-h-0 bg-slate-950/60 border-r border-slate-800/80 overflow-hidden">
           
           {/* 1. Header Toolbar: Search + View Toggle + Shift Quick Action */}
           <div className="p-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between gap-3 shrink-0">
@@ -822,7 +822,7 @@ export default function PosPage() {
           </div>
 
           {/* 3. Product Catalog List or Grid */}
-          <div className="flex-1 overflow-y-auto p-3.5 scrollbar-thin">
+          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 pos-scrollbar">
             {loading ? (
               <div className="h-full flex items-center justify-center text-slate-500 text-sm">
                 Đang tải danh mục hàng hóa...
@@ -959,7 +959,7 @@ export default function PosPage() {
         {/* ========================================================================= */}
         {/* CỘT PHẢI (35%): CASH REGISTER TERMINAL - ĐƠN HÀNG, KHÁCH HÀNG & THANH TOÁN */}
         {/* ========================================================================= */}
-        <div className="w-full lg:w-[420px] xl:w-[460px] bg-slate-900 flex flex-col justify-between shrink-0 shadow-2xl relative z-10 border-l border-slate-800">
+        <div className="w-full lg:w-[420px] xl:w-[460px] h-full max-h-full min-h-0 bg-slate-900 flex flex-col shrink-0 shadow-2xl relative z-10 border-l border-slate-800 overflow-hidden">
           
           {/* 1. Register Header & Hold Cart */}
           <div className="p-3 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between shrink-0">
@@ -1193,7 +1193,7 @@ export default function PosPage() {
           </div>
 
           {/* 3. Danh sách món trong Giỏ Hàng */}
-          <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5 scrollbar-thin">
+          <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-1.5 pos-scrollbar">
             {cart.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center py-16 text-slate-500">
                 <Receipt className="w-12 h-12 stroke-1 text-slate-700 mb-2" />
