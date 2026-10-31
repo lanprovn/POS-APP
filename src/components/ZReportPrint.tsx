@@ -147,3 +147,4 @@ export function ZReportPrint({ shift }: ZReportPrintProps) {
     </div>
   );
 }
+

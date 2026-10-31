@@ -261,3 +261,4 @@ export class PrismaShiftRepository implements IShiftRepository {
     };
   }
 }
+

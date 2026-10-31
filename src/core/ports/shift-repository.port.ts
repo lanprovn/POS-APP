@@ -40,3 +40,4 @@ export interface IShiftRepository {
   addCashTransaction(input: AddCashTransactionInput): Promise<CashTransactionEntity>;
   recordOrderSales(shiftId: string, paymentMethod: string, amount: number): Promise<void>;
 }
+

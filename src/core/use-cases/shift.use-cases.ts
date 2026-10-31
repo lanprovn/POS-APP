@@ -112,3 +112,4 @@ export class GetShiftDetailsUseCase {
     return shift;
   }
 }
+

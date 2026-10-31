@@ -66,3 +66,4 @@ export function calculateExpectedCash(params: {
 export function calculateDifference(actualCash: number, expectedCash: number): number {
   return actualCash - expectedCash;
 }
+
