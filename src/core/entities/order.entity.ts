@@ -1,6 +1,6 @@
 export type PaymentMethod = "CASH" | "BANK_TRANSFER" | "CARD";
 export type PaymentStatus = "PAID" | "PENDING" | "REFUNDED";
-export type OrderStatus = "COMPLETED" | "CANCELLED";
+export type OrderStatus = "COMPLETED" | "CANCELLED" | "PARTIALLY_REFUNDED" | "REFUNDED";
 
 export interface OrderItemEntity {
   id?: string;

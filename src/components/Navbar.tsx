@@ -16,7 +16,8 @@ import {
   Wallet,
   User,
   ChevronDown,
-  Terminal
+  Terminal,
+  RotateCcw
 } from "lucide-react";
 
 export function Navbar() {
@@ -69,6 +70,7 @@ export function Navbar() {
     { href: "/pos", label: "Quầy Thu Ngân", icon: ShoppingCart, hotkey: "F1" },
     { href: "/shifts", label: "Sổ Ca", icon: Clock },
     { href: "/orders", label: "Đơn Hàng", icon: Receipt },
+    { href: "/returns", label: "Đổi Trả", icon: RotateCcw, hotkey: "F4" },
     { href: "/customers", label: "Khách Hàng", icon: Users },
     { href: "/products", label: "Sản Phẩm", icon: Package },
     { href: "/inventory", label: "Kho Hàng", icon: Boxes },

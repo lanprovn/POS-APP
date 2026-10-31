@@ -36,6 +36,7 @@ model Product {
   category              Category?              @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   orderItems            OrderItem[]
   inventoryTransactions InventoryTransaction[]
+  returnItems           ReturnItem[]
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 
@@ -51,10 +52,11 @@ model Customer {
   phone      String?  @unique
   email      String?
   address    String?
-  totalSpent Float    @default(0)
-  points     Int      @default(0)
-  orders     Order[]
-  createdAt  DateTime @default(now())
+  totalSpent     Float           @default(0)
+  points         Int             @default(0)
+  orders         Order[]
+  returnReceipts ReturnReceipt[]
+  createdAt      DateTime        @default(now())
   updatedAt  DateTime @updatedAt
 
   @@map("customers")
@@ -77,9 +79,10 @@ model Order {
   customerId      String?
   customer        Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
   shiftId         String?
-  shift           CashShift?  @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  shift           CashShift?      @relation(fields: [shiftId], references: [id], onDelete: SetNull)
   items           OrderItem[]
-  createdAt       DateTime    @default(now())
+  returnReceipts  ReturnReceipt[]
+  createdAt       DateTime        @default(now())
   updatedAt       DateTime    @updatedAt
 
   @@index([orderNumber])
@@ -140,10 +143,11 @@ model CashShift {
   cashDrop     Float             @default(0) // Rút tiền nộp két chính
   cashIn       Float             @default(0) // Nạp thêm tiền mặt
   notes        String?
-  orders       Order[]
-  transactions CashTransaction[]
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  orders         Order[]
+  transactions   CashTransaction[]
+  returnReceipts ReturnReceipt[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   @@index([shiftCode])
   @@index([status])
@@ -163,4 +167,45 @@ model CashTransaction {
 
   @@index([shiftId])
   @@map("cash_transactions")
+}
+
+model ReturnReceipt {
+  id                String       @id @default(cuid())
+  returnNumber      String       @unique // ví dụ: TH-20261031-0001
+  orderId           String
+  order             Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  customerId        String?
+  customer          Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  shiftId           String?
+  shift             CashShift?   @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  totalRefundAmount Float        @default(0)
+  refundMethod      String       @default("CASH") // CASH, BANK_TRANSFER
+  reason            String?      // Hàng lỗi kỹ thuật, Khách đổi ý, Sai quy cách, Quá hạn, Khác...
+  cashierName       String       @default("Thu ngân")
+  notes             String?
+  items             ReturnItem[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([returnNumber])
+  @@index([orderId])
+  @@index([createdAt])
+  @@map("return_receipts")
+}
+
+model ReturnItem {
+  id                 String        @id @default(cuid())
+  returnId           String
+  returnReceipt      ReturnReceipt @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  orderItemId        String?
+  productId          String?
+  product            Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName        String
+  sku                String
+  quantity           Int           // Số lượng hoàn trả
+  unitPrice          Float         // Đơn giá bán lúc mua
+  refundAmount       Float         // Thành tiền hoàn (quantity * unitPrice)
+  restockToInventory Boolean       @default(true) // Có hồi kho hay loại bỏ
+
+  @@map("return_items")
 }

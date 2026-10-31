@@ -63,16 +63,17 @@ body {
   animation: radar-scan 2s ease-in-out infinite alternate;
 }
 
-/* Receipt & Z-Report Print Styling (Khổ giấy 80mm tiêu chuẩn) */
+/* Receipt, Z-Report & Return Receipt Print Styling (Khổ giấy 80mm tiêu chuẩn) */
 @media print {
   body * {
     visibility: hidden;
   }
   #printable-receipt, #printable-receipt *,
-  #printable-zreport, #printable-zreport * {
+  #printable-zreport, #printable-zreport *,
+  #printable-return, #printable-return * {
     visibility: visible;
   }
-  #printable-receipt, #printable-zreport {
+  #printable-receipt, #printable-zreport, #printable-return {
     position: absolute;
     left: 0;
     top: 0;
